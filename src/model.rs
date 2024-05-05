@@ -30,6 +30,8 @@ pub struct Observation {
 pub enum MonitoringTargetTypeDescriptor {
     HTTP { url: String },
     Systemd { unit: String },
+    Ping { target: String },
+    FSSpace { path: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]

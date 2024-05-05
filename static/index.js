@@ -25,15 +25,14 @@ let targets_by_name = {};
         color = "#ffc107";
       }
       else {
-        let timestamp = new Date(status.timestamp);
-      let formatted_timestamp = timestamp.toISOString().replace("T", " ").replace(/\.\d+Z/, "").split(":").slice(0, 2).join(":");
+        let timestamp = moment.utc(status.timestamp);
+         let formatted_timestamp = timestamp.format("YYYY-MM-DD HH:mm");
         tooltip = "Last checked: " + formatted_timestamp;
         color = {
           "Healthy": "#5cdd8b",
           "Unhealthy": "#dc3545"
         }[status.status];
       }
-
       div.children[0].innerHTML = target.name;
       div.children[1].style.backgroundColor = color;
       div.children[1].setAttribute("data-tooltip", tooltip);

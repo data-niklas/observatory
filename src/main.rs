@@ -1,11 +1,9 @@
 #[macro_use]
 extern crate rocket;
 
-use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-use rocket::figment::Figment;
 use rocket::fs::{relative, FileServer};
 use rocket::tokio::sync::broadcast::{channel, Sender};
 use rocket::{serde, tokio, Config};
@@ -67,10 +65,48 @@ async fn check_http_url(url: &str) -> MonitoringTargetStatus {
     }
 }
 
+async fn check_fs_space(path: &str) -> MonitoringTargetStatus {
+    let output = Command::new("df")
+        .arg("--output=pcent")
+        .arg(path)
+        .output()
+        .expect("Failed to execute command");
+    let output = String::from_utf8(output.stdout).unwrap();
+    // Percentage is in the second line, and includes a trailing % sign
+    let percentage = output.lines().nth(1).unwrap().trim_end_matches('%').trim();
+    let percentage = percentage.parse::<u8>().unwrap();
+
+    if percentage < 60 {
+        MonitoringTargetStatus::Healthy
+    } else if percentage < 90 {
+        MonitoringTargetStatus::Degraded
+    } else {
+        MonitoringTargetStatus::Unhealthy
+    }
+}
+
+async fn check_ping(address: &str) -> MonitoringTargetStatus {
+    let exit_status = Command::new("ping")
+        .arg("-c")
+        .arg("1")
+        .arg(address)
+        .output()
+        .expect("Failed to execute command")
+        .status;
+
+    if exit_status.success() {
+        MonitoringTargetStatus::Healthy
+    } else {
+        MonitoringTargetStatus::Unhealthy
+    }
+}
+
 async fn check_status(target: &MonitoringTargetDescriptor) -> MonitoringTargetStatus {
     match &target.target {
         MonitoringTargetTypeDescriptor::Systemd { unit } => check_systemd_unit(unit).await,
         MonitoringTargetTypeDescriptor::HTTP { url } => check_http_url(url).await,
+        MonitoringTargetTypeDescriptor::Ping { target } => check_ping(target).await,
+        MonitoringTargetTypeDescriptor::FSSpace { path } => check_fs_space(path).await,
         _ => MonitoringTargetStatus::Unhealthy,
     }
 }
