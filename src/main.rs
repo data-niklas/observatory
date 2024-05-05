@@ -1,69 +1,30 @@
 #[macro_use]
 extern crate rocket;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
+use rocket::figment::Figment;
 use rocket::fs::{relative, FileServer};
-use rocket::response::content::RawJson;
-use rocket::response::stream::{Event, EventStream};
-use rocket::serde::json::Json;
-use rocket::tokio;
-use rocket::tokio::select;
-use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
-use rocket::{Shutdown, State};
+use rocket::tokio::sync::broadcast::{channel, Sender};
+use rocket::{serde, tokio, Config};
 
 use chrono::Utc;
 
-mod model;
+pub mod model;
+use clap::Parser;
 use model::{
     MonitoringTargetDescriptor, MonitoringTargetStatus, MonitoringTargetTypeDescriptor,
     Observation, ObservedMonitoringTargetStatus,
 };
 
-mod db;
+pub mod args;
+pub mod db;
+pub mod paths;
 
-struct DBPath(pub PathBuf);
 /// Returns an infinite stream of server-sent events. Each event is a message
 /// pulled from a broadcast queue sent by the `post` handler.
-#[get("/events")]
-async fn events(queue: &State<Sender<Observation>>, mut end: Shutdown) -> EventStream![] {
-    let mut rx = queue.subscribe();
-    EventStream! {
-        loop {
-            let msg = select! {
-                msg = rx.recv() => match msg {
-                    Ok(msg) => msg,
-                    Err(RecvError::Closed) => break,
-                    Err(RecvError::Lagged(_)) => continue,
-                },
-                _ = &mut end => break,
-            };
-
-            yield Event::json(&msg);
-        }
-    }
-}
-
-#[get("/targets")]
-async fn targets(db_path: &State<DBPath>) -> Json<Vec<MonitoringTargetDescriptor>> {
-    let connection = db::init_db(&db_path.0).unwrap();
-    let monitoring_targets = db::get_monitoring_target_descriptors(&connection).unwrap();
-    Json(monitoring_targets)
-}
-
-#[get("/status/<name>")]
-async fn status(
-    name: &str,
-    db_path: &State<DBPath>,
-) -> Json<Option<ObservedMonitoringTargetStatus>> {
-    let connection = db::init_db(&db_path.0).unwrap();
-    let observed_statuses =
-        db::get_last_observations(&connection, &vec![name.to_string()]).unwrap();
-    let observed_statuses = observed_statuses.into_iter().next();
-    Json(observed_statuses)
-}
 
 /// Receive a message from a form submission and broadcast it to any receivers.
 // #[post("/message", data = "<form>")]
@@ -114,28 +75,14 @@ async fn check_status(target: &MonitoringTargetDescriptor) -> MonitoringTargetSt
     }
 }
 
-fn schedule_checks(event_sender: Sender<Observation>, db_path: &Path) {
-    let monitoring_targets = vec![
-        MonitoringTargetDescriptor {
-            name: "vnstat".to_string(),
-            interval: 5,
-            retries: 0,
-            timeout: 5,
-            target: MonitoringTargetTypeDescriptor::Systemd {
-                unit: "vnstat".to_string(),
-            },
-        },
-        MonitoringTargetDescriptor {
-            name: "google".to_string(),
-            interval: 10,
-            retries: 2,
-            timeout: 5,
-            target: MonitoringTargetTypeDescriptor::HTTP {
-                url: "https://x.z.y".to_string(),
-            },
-        },
-    ];
-
+fn schedule_checks(event_sender: Sender<Observation>, args: &args::Args) {
+    let db_path = &args.database;
+    let monitoring_targets = if args.targets.is_none() {
+        vec![]
+    } else {
+        let content = std::fs::read_to_string(&args.targets.as_ref().unwrap()).unwrap();
+        serde::json::from_str::<Vec<MonitoringTargetDescriptor>>(&content).unwrap()
+    };
     let connection = db::init_db(db_path).unwrap();
     for target in monitoring_targets.iter() {
         db::create_or_update_monitoring_target(&connection, target).unwrap();
@@ -188,13 +135,17 @@ fn schedule_checks(event_sender: Sender<Observation>, db_path: &Path) {
 
 #[rocket::main]
 async fn main() {
-    let db_path = PathBuf::from("monitoring.db");
+    let args = args::Args::parse();
     let event_stream = channel::<Observation>(1024);
-    schedule_checks(event_stream.0.clone(), &db_path);
+    schedule_checks(event_stream.0.clone(), &args);
+    let rocket_config = Config::figment()
+        .merge((Config::PORT, args.port))
+        .merge((Config::ADDRESS, args.address.clone()));
     let rocket = rocket::build()
+        .configure(rocket_config)
         .manage(event_stream.0)
-        .manage(DBPath(db_path))
-        .mount("/", routes![events, targets, status])
+        .manage(args)
+        .mount("/", routes![paths::events, paths::targets, paths::status])
         .mount("/", FileServer::from(relative!("static")));
     let ignited_rocket = rocket.ignite().await.expect("Rocket failed to ignite");
     let _finished_rocket = ignited_rocket
