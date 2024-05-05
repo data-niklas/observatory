@@ -28,9 +28,11 @@ let targets_by_name = {};
         let timestamp = moment.utc(status.timestamp);
          let formatted_timestamp = timestamp.format("YYYY-MM-DD HH:mm");
         tooltip = "Last checked: " + formatted_timestamp;
+        console.log(status);
         color = {
           "Healthy": "#5cdd8b",
-          "Unhealthy": "#dc3545"
+          "Unhealthy": "#dc3545",
+          "Degraded": "#ffc107"
         }[status.status];
       }
       div.children[0].innerHTML = target.name;
