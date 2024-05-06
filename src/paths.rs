@@ -1,5 +1,5 @@
 use crate::args::Args;
-use crate::db::{get_last_observations, get_monitoring_target_descriptors, init_db};
+use crate::db::{get_last_observations, get_monitoring_target_descriptors, init_db, get_observations};
 use crate::model::{MonitoringTargetDescriptor, Observation, ObservedMonitoringTargetStatus, Message};
 use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
@@ -35,14 +35,25 @@ pub async fn targets(args: &State<Args>) -> Json<Vec<MonitoringTargetDescriptor>
     Json(monitoring_targets)
 }
 
-#[get("/status/<name>")]
+#[get("/status/<id>")]
 pub async fn status(
-    name: &str,
+    id: &str,
     args: &State<Args>,
 ) -> Json<Option<ObservedMonitoringTargetStatus>> {
     let database = &args.database;
     let connection = init_db(database).unwrap();
-    let observed_statuses = get_last_observations(&connection, &vec![name.to_string()]).unwrap();
+    let observed_statuses = get_last_observations(&connection, &vec![id.to_string()]).unwrap();
     let observed_statuses = observed_statuses.into_iter().next();
     Json(observed_statuses)
+}
+
+#[get("/observations/<id>")]
+pub async fn observations(
+    id: &str,
+    args: &State<Args>,
+) -> Json<Vec<Observation>> {
+    let database = &args.database;
+    let connection = init_db(database).unwrap();
+    let observations = get_observations(&connection, id).unwrap();
+    Json(observations)
 }

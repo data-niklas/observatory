@@ -39,6 +39,7 @@ pub enum MonitoringTargetTypeDescriptor {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
 pub struct MonitoringTargetDescriptor {
+    pub id: String,
     pub name: String,
     pub interval: u64, // in seconds
     pub retries: u8,

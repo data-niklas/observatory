@@ -4,12 +4,11 @@ extern crate rocket;
 use std::process::Command;
 use std::time::Duration;
 
-use rocket::fairing::Fairing;
-use rocket::figment::Figment;
 use rocket::figment::providers::Env;
+use rocket::figment::Figment;
 use rocket::fs::{relative, FileServer};
 use rocket::tokio::sync::broadcast::{channel, Sender};
-use rocket::{serde, tokio, Config, Ignite, Rocket, State};
+use rocket::{serde, tokio, Config};
 
 use chrono::Utc;
 
@@ -152,8 +151,20 @@ async fn check_status(target: &MonitoringTargetDescriptor) -> CheckedMonitoringT
         MonitoringTargetTypeDescriptor::HTTP { url } => check_http_url(url).await,
         MonitoringTargetTypeDescriptor::Ping { target } => check_ping(target).await,
         MonitoringTargetTypeDescriptor::FSSpace { path } => check_fs_space(path).await,
-        _ => unimplemented!(),
     }
+}
+
+fn schedule_cleanup(args: &args::Args) {
+    let db_path = args.database.clone();
+    let observation_retention_duration = args.observation_retention_duration;
+    let observation_retention_check_interval = args.observation_retention_check_interval;
+    tokio::task::spawn(async move {
+        let connection = db::init_db(&db_path).unwrap();
+        loop {
+            db::delete_old_observations(&connection, observation_retention_duration).unwrap();
+            tokio::time::sleep(Duration::from_secs(observation_retention_check_interval)).await;
+        }
+    });
 }
 
 fn schedule_checks(event_sender: Sender<Message>, args: &args::Args) {
@@ -229,6 +240,7 @@ fn schedule_checks(event_sender: Sender<Message>, args: &args::Args) {
 async fn main() {
     let args = args::Args::parse();
     let event_stream = channel::<Message>(1024);
+    schedule_cleanup(&args);
     schedule_checks(event_stream.0.clone(), &args);
 
     let mut rocket_config = Figment::from(Config::default())
@@ -243,7 +255,7 @@ async fn main() {
         .configure(rocket_config)
         .manage(event_stream.0)
         .manage(args)
-        .mount("/", routes![paths::events, paths::targets, paths::status])
+        .mount("/", routes![paths::events, paths::targets, paths::status, paths::observations])
         .mount("/", FileServer::from(relative!("static")));
     let ignited_rocket = rocket.ignite().await.expect("Rocket failed to ignite");
     let _finished_rocket = ignited_rocket
