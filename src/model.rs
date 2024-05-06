@@ -3,7 +3,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use rocket::serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub enum MonitoringTargetStatus {
     #[default]
@@ -11,22 +11,25 @@ pub enum MonitoringTargetStatus {
     Unhealthy,
     Degraded,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct CheckedMonitoringTargetStatus {
+    pub status: MonitoringTargetStatus,
+    pub description: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
 pub struct ObservedMonitoringTargetStatus {
     pub timestamp: DateTime<Utc>,
     pub status: MonitoringTargetStatus,
+    pub description: String,
     pub retries: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(crate = "rocket::serde")]
-pub struct Observation {
-    pub observed_status: ObservedMonitoringTargetStatus,
-    pub monitoring_target: MonitoringTargetDescriptor,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(crate = "rocket::serde")]
+#[serde(crate = "rocket::serde", tag = "type")]
 pub enum MonitoringTargetTypeDescriptor {
     HTTP { url: String },
     Systemd { unit: String },
@@ -47,4 +50,18 @@ pub struct MonitoringTargetDescriptor {
 pub struct MonitoringTarget {
     pub descriptor: MonitoringTargetDescriptor,
     pub status: Vec<ObservedMonitoringTargetStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct Observation {
+    pub observed_status: ObservedMonitoringTargetStatus,
+    pub monitoring_target: MonitoringTargetDescriptor,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "rocket::serde", tag = "type")]
+pub enum Message {
+    Observation(Observation),
+    AppUpdate,
 }

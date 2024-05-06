@@ -1,6 +1,6 @@
 use crate::args::Args;
 use crate::db::{get_last_observations, get_monitoring_target_descriptors, init_db};
-use crate::model::{MonitoringTargetDescriptor, Observation, ObservedMonitoringTargetStatus};
+use crate::model::{MonitoringTargetDescriptor, Observation, ObservedMonitoringTargetStatus, Message};
 use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
 use rocket::tokio::select;
@@ -8,9 +8,10 @@ use rocket::tokio::sync::broadcast::{error::RecvError, Sender};
 use rocket::{Shutdown, State};
 
 #[get("/events")]
-pub async fn events(queue: &State<Sender<Observation>>, mut end: Shutdown) -> EventStream![] {
+pub async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> EventStream![] {
     let mut rx = queue.subscribe();
     EventStream! {
+        yield Event::json(&Message::AppUpdate);
         loop {
             let msg = select! {
                 msg = rx.recv() => match msg {

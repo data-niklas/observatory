@@ -3,8 +3,7 @@ use std::path::Path;
 use rusqlite::{params, Connection, Result};
 
 use crate::model::{
-    MonitoringTarget, MonitoringTargetDescriptor, MonitoringTargetStatus,
-    MonitoringTargetTypeDescriptor, Observation, ObservedMonitoringTargetStatus,
+    MonitoringTargetDescriptor, Observation, ObservedMonitoringTargetStatus,
 };
 use rocket::serde::json::serde_json;
 
@@ -25,6 +24,7 @@ pub fn init_db(path: &Path) -> Result<Connection> {
             monitoring_target_id TEXT,
             timestamp TEXT,
             status TEXT NOT NULL,
+            description TEXT NOT NULL,
             retries INTEGER NOT NULL,
             PRIMARY KEY (monitoring_target_id, timestamp),
             FOREIGN KEY (monitoring_target_id) REFERENCES monitoring_targets (id)
@@ -34,22 +34,34 @@ pub fn init_db(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
+pub fn delete_old_observations(conn: &Connection, keep_days: i64) -> Result<()> {
+    let mut stmt = conn.prepare(
+        "DELETE FROM observations
+        WHERE timestamp < datetime('now', ?)",
+    )?;
+    stmt.execute(params![format!("-{} days", keep_days)])?;
+    Ok(())
+}
+
 pub fn add_observation(conn: &Connection, observation: &Observation) -> Result<()> {
     let mut insert_observation = conn.prepare(
-        "INSERT INTO observations (monitoring_target_id, timestamp, status, retries)
-        VALUES (?, ?, ?, ?)",
+        "INSERT INTO observations (monitoring_target_id, timestamp, status, description, retries)
+        VALUES (?, ?, ?, ?, ?)",
     )?;
     let observed_status = &observation.observed_status;
     insert_observation.execute((
         &observation.monitoring_target.name,
         observed_status.timestamp.to_rfc3339(),
         serde_json::to_string(&observed_status.status).unwrap(),
+        &observed_status.description,
         observed_status.retries,
     ))?;
     Ok(())
 }
 
-pub fn get_monitoring_target_descriptors(conn: &Connection) -> Result<Vec<MonitoringTargetDescriptor>> {
+pub fn get_monitoring_target_descriptors(
+    conn: &Connection,
+) -> Result<Vec<MonitoringTargetDescriptor>> {
     let mut stmt =
         conn.prepare("SELECT id, interval, retries, timeout, target FROM monitoring_targets")?;
     let monitoring_targets_iter = stmt.query_map([], |row| {
@@ -78,7 +90,7 @@ pub fn get_last_observations(
     let mut result = vec![];
     for name in names.iter() {
         let mut stmt = conn.prepare(
-            "SELECT timestamp, status, retries FROM observations
+            "SELECT timestamp, status, description, retries FROM observations
             WHERE monitoring_target_id = ?
             ORDER BY timestamp DESC
             LIMIT 1",
@@ -87,7 +99,8 @@ pub fn get_last_observations(
             Ok(ObservedMonitoringTargetStatus {
                 timestamp: row.get(0)?,
                 status: serde_json::from_str(&row.get::<_, String>(1)?).unwrap(),
-                retries: row.get(2)?,
+                description: row.get(2)?,
+                retries: row.get(3)?,
             })
         })?;
         for observation in observation_iter {

@@ -13,8 +13,14 @@ let targets_by_name = {};
       if (div.children.length == 0) {
         let title = document.createElement("h2");
         title.innerHTML = target.name;
+        let description = document.createElement("span");
         let status_line = document.createElement("div");
-        div.appendChild(title);
+        status_line.className = "status_line";
+        let horizontal_layout = document.createElement("div");
+        horizontal_layout.className = "horizontal";
+        horizontal_layout.appendChild(title);
+        horizontal_layout.appendChild(description);
+        div.appendChild(horizontal_layout);
         div.appendChild(status_line);
       }
 
@@ -28,14 +34,14 @@ let targets_by_name = {};
         let timestamp = moment.utc(status.timestamp);
          let formatted_timestamp = timestamp.format("YYYY-MM-DD HH:mm");
         tooltip = "Last checked: " + formatted_timestamp;
-        console.log(status);
         color = {
           "Healthy": "#5cdd8b",
           "Unhealthy": "#dc3545",
           "Degraded": "#ffc107"
         }[status.status];
       }
-      div.children[0].innerHTML = target.name;
+      div.children[0].children[0].innerHTML = target.name;
+      div.children[0].children[1].innerHTML = status.description;
       div.children[1].style.backgroundColor = color;
       div.children[1].setAttribute("data-tooltip", tooltip);
 
@@ -61,10 +67,20 @@ let targets_by_name = {};
       document.getElementById("targets").append(...children);
     }
     init();
+    let startup = true;
     let event_source = new EventSource("/events");
     event_source.onmessage = function (event) {
       let data = JSON.parse(event.data);
-      let div = document.createElement("div");
-      let target = targets_by_name[data.monitoring_target.name];
-      update_target_dom(target.dom, target.target, data.observed_status);
+      if (data.type == "Observation"){
+        let target = targets_by_name[data.monitoring_target.name];
+        update_target_dom(target.dom, target.target, data.observed_status);
+      }
+      else if (data.type == "AppUpdate"){
+        if (!startup){
+          window.location.reload();
+        }
+        else {
+          startup = false;
+        }
+      }
     };
