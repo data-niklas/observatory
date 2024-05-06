@@ -10,10 +10,10 @@ pub struct Args {
     #[arg(short, long, default_value = "monitoring.db")]
     pub database: PathBuf,
 
-    #[arg(short, long, default_value = "8080")]
-    pub port: u16,
+    #[arg(short, long)]
+    pub port: Option<u16>,
 
-    #[arg(short, long, default_value = "127.0.0.1")]
-    pub address: String,
+    #[arg(short, long)]
+    pub address: Option<String>,
 
 }

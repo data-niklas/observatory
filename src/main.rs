@@ -5,6 +5,8 @@ use std::process::Command;
 use std::time::Duration;
 
 use rocket::fairing::Fairing;
+use rocket::figment::Figment;
+use rocket::figment::providers::Env;
 use rocket::fs::{relative, FileServer};
 use rocket::tokio::sync::broadcast::{channel, Sender};
 use rocket::{serde, tokio, Config, Ignite, Rocket, State};
@@ -229,9 +231,14 @@ async fn main() {
     let event_stream = channel::<Message>(1024);
     schedule_checks(event_stream.0.clone(), &args);
 
-    let rocket_config = Config::figment()
-        .merge((Config::PORT, args.port))
-        .merge((Config::ADDRESS, args.address.clone()));
+    let mut rocket_config = Figment::from(Config::default())
+        .merge(Env::prefixed("OBSERVATORY_").ignore(&["PROFILE"]).global());
+    if args.port.is_some() {
+        rocket_config = rocket_config.merge((Config::PORT, args.port.unwrap()));
+    }
+    if args.address.is_some() {
+        rocket_config = rocket_config.merge((Config::ADDRESS, args.address.clone().unwrap()));
+    }
     let rocket = rocket::build()
         .configure(rocket_config)
         .manage(event_stream.0)
