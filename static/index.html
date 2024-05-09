@@ -1,65 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark" />
-  <title>Observatory</title>
-  <link rel="stylesheet" href="pico.classless.min.css" />
-  <script src="moment.min.js"></script>
-  <script src="index.js" defer></script>
-  <style>
-    .target {
-      margin-bottom: 18px;
-      padding: 8px;
-      border-radius: 8px;
-    }
-
-    .target:hover {
-      background-color: #66666655;
-      cursor: pointer;
-    }
-
-    @keyframes button-click {
-      0% {
-        transform: scale(1);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Observatory</title>
+    <link rel="stylesheet" href="pico.classless.min.css" />
+    <script src="moment.min.js"></script>
+    <script src="index.js" defer></script>
+    <style>
+      html {
+        font-size: 18px;
+        --pico-form-element-spacing-vertical: 4px!important;
+        --pico-form-element-spacing-horizontal: 4px!important;
       }
-      100% {
-        transform: scale(0.98);
+
+      .target {
+        margin-bottom: 18px;
+        padding: 8px;
+        border-radius: 8px;
       }
-    }
 
-    .target:active {
-      animation: button-click 0.1s ease-out forwards;
-    }
+      .target:hover {
+        background-color: #66666655;
+        cursor: pointer;
+      }
 
-    .target h2 {
-      font: 26px sans-serif;
-      margin: 0;
-      margin-bottom: 8px;
-    }
+      @keyframes button-click {
+        0% {
+          transform: scale(1);
+        }
+        100% {
+          transform: scale(0.98);
+        }
+      }
 
-    .target > .horizontal {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+      .target:active {
+        animation: button-click 0.1s ease-out forwards;
+      }
 
-    .target > .status_line {
-      height: 10px;
-      border-radius: 4px;
-    }
+      .target h2 {
+        font: 26px sans-serif;
+        margin: 0;
+        margin-bottom: 8px;
+      }
 
-    .icon {
-      display: none;
-    }
-  </style>
-</head>
+      .horizontal {
+        display: flex;
+        align-items: center;
+      }
 
-<body>
-  <main id="main">
-  </main>
-</body>
+      .target > .status_line {
+        height: 10px;
+        border-radius: 4px;
+      }
 
+      .target > .horizontal {
+        justify-content: space-between;
+      }
+
+      .blob {
+        width: 70px;
+        height: 21px;
+        border-radius: 50rem;
+        margin-right: 20px;
+      }
+
+      @keyframes enlargen {
+        0% {
+          transform: scale(1);
+        }
+        100% {
+          transform: scale(1.4);
+        }
+      }
+
+      .blob:hover {
+        animation: enlargen 0.1s ease-out forwards;
+      }
+
+      .observation {
+        width: fit-content;
+        margin: 12px;
+      }
+
+      #details-header > button {
+        margin-right: 20px;
+        margin-left: 12px;
+      }
+      #details-header > button:active {
+        animation: button-click 0.1s ease-out forwards;
+      }
+      #details-header > h2 {
+        margin-bottom: 0px!important;
+      }
+      .datetime {
+        margin-left: 200px;
+        color: #BBBBBB;
+      }
+    </style>
+  </head>
+
+  <body></body>
 </html>

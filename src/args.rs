@@ -16,10 +16,10 @@ pub struct Args {
     #[arg(short, long)]
     pub address: Option<String>,
 
-    #[arg(short, long, default_value_t = 30)]
+    #[arg(long, default_value_t = 30)]
     pub observation_retention_duration: u32,
 
-    #[arg(short, long, default_value_t = 60)]
+    #[arg(long, default_value_t = 60)]
     pub observation_retention_check_interval: u64
 
 }
