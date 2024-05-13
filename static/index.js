@@ -117,7 +117,8 @@ class OverviewRoute extends Route {
 
     let tooltip = "";
     let color = "";
-    if (status === null) {
+    let description = "";
+    if (status == null) {
       tooltip = "No data";
       color = "#ffc107";
     } else {
@@ -125,9 +126,10 @@ class OverviewRoute extends Route {
       let formatted_timestamp = timestamp.format("YYYY-MM-DD HH:mm");
       tooltip = "Last checked: " + formatted_timestamp;
       color = COLORS[status.status];
+      description = status.description;
     }
     div.children[0].children[0].innerHTML = target.name;
-    div.children[0].children[1].innerHTML = status.description;
+    div.children[0].children[1].innerHTML = description;
     div.children[1].style.backgroundColor = color;
     div.children[1].setAttribute("data-tooltip", tooltip);
   }
@@ -170,7 +172,10 @@ class OverviewRoute extends Route {
   async on_event(data) {
     if (data.type == "Observation") {
       if (!(data.monitoring_target.id in this.targets_by_id)) {
-        await self.refresh();
+        await this.refresh();
+      }
+      if (!(data.monitoring_target.id in this.targets_by_id)) {
+        return;
       }
       let target = this.targets_by_id[data.monitoring_target.id];
       this.update_target_html(target.dom, target.target, data.observed_status);
