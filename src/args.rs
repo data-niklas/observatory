@@ -5,9 +5,9 @@ use std::path::PathBuf;
 #[command(version, about, long_about = None)]
 pub struct Args {
     #[arg(short, long)]
-    pub targets: Option<PathBuf>,
+    pub config: Option<PathBuf>,
 
-    #[arg(short, long, default_value = "monitoring.db")]
+    #[arg(short, long, default_value = "observatory.db")]
     pub database: PathBuf,
 
     #[arg(short, long)]
@@ -20,6 +20,8 @@ pub struct Args {
     pub observation_retention_duration: u32,
 
     #[arg(long, default_value_t = 60)]
-    pub observation_retention_check_interval: u64
+    pub observation_retention_check_interval: u64,
 
+    #[arg(short, long, default_value = "static")]
+    pub website: PathBuf,
 }

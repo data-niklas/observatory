@@ -146,6 +146,11 @@ class OverviewRoute extends Route {
     document.getElementById("overview-main").append(...this.children);
   }
 
+  async refresh(){
+    this.loaded = false;
+    await this.on_attach();
+  }
+
   async init_children() {
     let targets = await ObservatoryApiClient.targets();
     // sort targets by name
@@ -162,8 +167,11 @@ class OverviewRoute extends Route {
     }
   }
 
-  on_event(data) {
+  async on_event(data) {
     if (data.type == "Observation") {
+      if (!(data.monitoring_target.id in this.targets_by_id)) {
+        await self.refresh();
+      }
       let target = this.targets_by_id[data.monitoring_target.id];
       this.update_target_html(target.dom, target.target, data.observed_status);
     }

@@ -34,10 +34,10 @@ pub fn schedule_cleanup(args: &args::Args) {
 
 pub fn schedule_checks(event_sender: Sender<Message>, args: &args::Args) {
     let db_path = &args.database;
-    let monitoring_targets = if args.targets.is_none() {
+    let monitoring_targets = if args.config.is_none() {
         vec![]
     } else {
-        let content = std::fs::read_to_string(&args.targets.as_ref().unwrap()).unwrap();
+        let content = std::fs::read_to_string(&args.config.as_ref().unwrap()).unwrap();
         serde::json::from_str::<Vec<MonitoringTargetDescriptor>>(&content).unwrap()
     };
     let connection = db::init_db(db_path).unwrap();

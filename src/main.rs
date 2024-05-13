@@ -3,7 +3,7 @@ extern crate rocket;
 
 use rocket::figment::providers::Env;
 use rocket::figment::Figment;
-use rocket::fs::{relative, FileServer};
+use rocket::fs::FileServer;
 use rocket::tokio::sync::broadcast::channel;
 use rocket::Config;
 
@@ -42,6 +42,9 @@ async fn main() {
     if args.address.is_some() {
         rocket_config = rocket_config.merge((Config::ADDRESS, args.address.clone().unwrap()));
     }
+
+    let file_server = FileServer::from(&args.website);
+
     let rocket = rocket::build()
         .configure(rocket_config)
         .manage(event_stream.0)
@@ -55,7 +58,7 @@ async fn main() {
                 paths::observations
             ],
         )
-        .mount("/", FileServer::from(relative!("static")));
+        .mount("/", file_server);
     let ignited_rocket = rocket.ignite().await.expect("Rocket failed to ignite");
     let _finished_rocket = ignited_rocket
         .launch()
