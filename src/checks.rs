@@ -1,6 +1,6 @@
-use std::process::Command;
-
 use crate::model::{CheckedMonitoringTargetStatus, MonitoringTargetStatus};
+use std::{process::Command, sync::Arc, time::Duration};
+use systemstat::{Platform, System};
 
 pub async fn check_systemd_unit(unit: &str) -> CheckedMonitoringTargetStatus {
     let exit_status = Command::new("systemctl")
@@ -30,44 +30,47 @@ pub async fn check_systemd_unit(unit: &str) -> CheckedMonitoringTargetStatus {
     }
 }
 
-pub async fn check_http_url(url: &str) -> CheckedMonitoringTargetStatus {
-    let output = Command::new("curl")
-        .arg("-s")
-        .arg("-o")
-        .arg("/dev/null")
-        .arg("-w")
-        .arg("%{http_code}")
-        .arg(url)
-        .output()
-        .expect("Failed to execute command");
-    let status_code = String::from_utf8(output.stdout).unwrap();
-    let status_code = status_code.parse::<u16>().unwrap();
-    let exit_status = output.status;
+async fn check_http_url_result(url: &str) -> Result<CheckedMonitoringTargetStatus, reqwest::Error> {
+    let client = reqwest::Client::new();
+    let response = client.get(url).send().await?;
+    let status_code = response.status().as_u16();
 
-    if exit_status.success() {
-        CheckedMonitoringTargetStatus {
+    if response.status().is_success() {
+        Ok(CheckedMonitoringTargetStatus {
             status: MonitoringTargetStatus::Healthy,
             description: "".to_string(),
-        }
+        })
     } else {
-        CheckedMonitoringTargetStatus {
+        Ok(CheckedMonitoringTargetStatus {
             status: MonitoringTargetStatus::Unhealthy,
             description: format!("Status code: {}", status_code),
-        }
+        })
+    }
+}
+
+pub async fn check_http_url(url: &str) -> CheckedMonitoringTargetStatus {
+    match check_http_url_result(url).await {
+        Ok(status) => status,
+        Err(error) => CheckedMonitoringTargetStatus {
+            status: MonitoringTargetStatus::Unhealthy,
+            description: error.to_string(),
+        },
     }
 }
 
 pub async fn check_fs_space(path: &str) -> CheckedMonitoringTargetStatus {
-    let output = Command::new("df")
-        .arg("--output=pcent")
-        .arg(path)
-        .output()
-        .expect("Failed to execute command");
-    let output = String::from_utf8(output.stdout).unwrap();
-    // Percentage is in the second line, and includes a trailing % sign
-    let percentage = output.lines().nth(1).unwrap().trim_end_matches('%').trim();
-    let percentage = percentage.parse::<u8>().unwrap();
-
+    let system = System::new();
+    let percentage: u8 = match system.mount_at(path) {
+        Ok(mount) => {
+            (100.0_f32 * mount.avail.as_u64() as f32 / mount.total.as_u64() as f32).round() as u8
+        }
+        Err(_) => {
+            return CheckedMonitoringTargetStatus {
+                status: MonitoringTargetStatus::Unhealthy,
+                description: format!("Mount point not found: {}", path),
+            }
+        }
+    };
     let status = if percentage < 60 {
         MonitoringTargetStatus::Healthy
     } else if percentage < 90 {
@@ -81,36 +84,50 @@ pub async fn check_fs_space(path: &str) -> CheckedMonitoringTargetStatus {
     }
 }
 
-pub async fn check_ping(address: &str) -> CheckedMonitoringTargetStatus {
-    let output = Command::new("ping")
-        .arg("-c")
-        .arg("1")
-        .arg(address)
-        .output()
-        .expect("Failed to execute command");
-    let ping = String::from_utf8(output.stdout).unwrap();
-    let ping = ping
-        .lines()
-        .find(|line| line.starts_with("rtt"))
-        .unwrap()
-        .split('/')
-        .nth(4)
-        .unwrap()
-        .parse::<f32>()
-        .unwrap();
-    // Format ping without decimal places
-    let ping = ping.round() as u32;
-    let exit_status = output.status;
+async fn check_ping_result(
+    address: &str,
+) -> Result<CheckedMonitoringTargetStatus, ping_rs::PingError> {
+    let timeout = Duration::from_secs(1);
+    let options = ping_rs::PingOptions {
+        ttl: 128,
+        dont_fragment: true,
+    };
+    let data = vec![];
+    let data_ref = Arc::new(data.as_slice());
+    let addr = match address.parse() {
+        Ok(addr) => addr,
+        Err(_) => {
+            return Ok(CheckedMonitoringTargetStatus {
+                status: MonitoringTargetStatus::Unhealthy,
+                description: format!("Invalid address: {}", address),
+            });
+        }
+    };
+    let response = ping_rs::send_ping_async(&addr, timeout, data_ref, Some(&options)).await?;
+    let ping = response.rtt;
+    Ok(CheckedMonitoringTargetStatus {
+        status: MonitoringTargetStatus::Healthy,
+        description: format!("{} ms", ping),
+    })
+}
 
-    if exit_status.success() {
-        CheckedMonitoringTargetStatus {
-            status: MonitoringTargetStatus::Healthy,
-            description: format!("{} ms", ping),
-        }
-    } else {
-        CheckedMonitoringTargetStatus {
+fn format_ping_error(ping_error: ping_rs::PingError) -> String {
+    match ping_error {
+        ping_rs::PingError::TimedOut => "Timed out".to_string(),
+        ping_rs::PingError::IoPending => "IO pending".to_string(),
+        ping_rs::PingError::OsError(a, text) => format!("OS error {}: {}", a, text),
+        ping_rs::PingError::IpError(a) => format!("IP error: {}", a),
+        ping_rs::PingError::BadParameter(a) => format!("Bad parameter: {}", a),
+        ping_rs::PingError::DataSizeTooBig(a) => format!("Data size too big: {}", a),
+    }
+}
+
+pub async fn check_ping(address: &str) -> CheckedMonitoringTargetStatus {
+    match check_ping_result(address).await {
+        Ok(status) => status,
+        Err(error) => CheckedMonitoringTargetStatus {
             status: MonitoringTargetStatus::Unhealthy,
-            description: "".to_string(),
-        }
+            description: format_ping_error(error),
+        },
     }
 }
