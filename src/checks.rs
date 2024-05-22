@@ -62,9 +62,9 @@ pub async fn check_http_url(url: &str) -> CheckedMonitoringTargetStatus {
 pub async fn check_fs_space(path: &str) -> CheckedMonitoringTargetStatus {
     let system = System::new();
     let percentage: u8 = match system.mount_at(path) {
-        Ok(mount) => {
-            (100.0_f32 * mount.avail.as_u64() as f32 / mount.total.as_u64() as f32).round() as u8
-        }
+        Ok(mount) => (100.0_f32 * (mount.total.as_u64() - mount.free.as_u64()) as f32
+            / mount.total.as_u64() as f32)
+            .round() as u8,
         Err(_) => {
             return CheckedMonitoringTargetStatus {
                 status: MonitoringTargetStatus::Unhealthy,
