@@ -1,4 +1,5 @@
 use crate::model::{CheckedMonitoringTargetStatus, MonitoringTargetStatus};
+use dns_lookup::lookup_host;
 use std::{process::Command, sync::Arc, time::Duration};
 use systemstat::{Platform, System};
 
@@ -87,6 +88,22 @@ pub async fn check_fs_space(path: &str) -> CheckedMonitoringTargetStatus {
 async fn check_ping_result(
     address: &str,
 ) -> Result<CheckedMonitoringTargetStatus, ping_rs::PingError> {
+    let ips = match lookup_host(address) {
+        Ok(ips) => ips,
+        Err(_) => {
+            return Ok(CheckedMonitoringTargetStatus {
+                status: MonitoringTargetStatus::Unhealthy,
+                description: format!("Failed to resolve host: {}", address),
+            });
+        }
+    };
+    if ips.is_empty() {
+        return Ok(CheckedMonitoringTargetStatus {
+            status: MonitoringTargetStatus::Unhealthy,
+            description: format!("No IP addresses found for host: {}", address),
+        });
+    }
+    let addr = ips[0];
     let timeout = Duration::from_secs(1);
     let options = ping_rs::PingOptions {
         ttl: 128,
@@ -94,17 +111,9 @@ async fn check_ping_result(
     };
     let data = vec![];
     let data_ref = Arc::new(data.as_slice());
-    let addr = match address.parse() {
-        Ok(addr) => addr,
-        Err(_) => {
-            return Ok(CheckedMonitoringTargetStatus {
-                status: MonitoringTargetStatus::Unhealthy,
-                description: format!("Invalid address: {}", address),
-            });
-        }
-    };
     let response = ping_rs::send_ping_async(&addr, timeout, data_ref, Some(&options)).await?;
     let ping = response.rtt;
+
     Ok(CheckedMonitoringTargetStatus {
         status: MonitoringTargetStatus::Healthy,
         description: format!("{} ms", ping),

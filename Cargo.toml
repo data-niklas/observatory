@@ -13,3 +13,4 @@ rusqlite = {version="0.31.0", features=["chrono"]}
 reqwest = { version = "0.12.4", features = [] }
 ping-rs = "0.1.2"
 systemstat = "0.2.3"
+dns-lookup = "2.0.4"
