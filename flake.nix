@@ -51,6 +51,8 @@
 
         buildInputs = [
           pkgs.sqlite
+          pkgs.pkg-config
+          pkgs.openssl
         ];
 
         # Additional environment variables can be set directly
